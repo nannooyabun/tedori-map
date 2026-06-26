@@ -217,7 +217,7 @@ function tl(u){const moves=[],rests=[];let rs=0;const R=ROLE[u.role].range;
   if(u.sim){for(const l of u.sim.log){if(l.type==='move'){const ms=rs+l.wait,me=ms+l.tm;rests.push({cell:l.from,t0:rs,t1:ms});const dx=l.to[0]-l.from[0],dy=l.to[1]-l.from[1],ad=Math.max(Math.abs(dx),Math.abs(dy)),st8=(dx===0||dy===0||Math.abs(dx)===Math.abs(dy));moves.push({from:l.from,to:l.to,t0:ms,t1:me,bend:!(st8&&ad===R)});rs=me;}}}
   rests.push({cell:u.stops[u.stops.length-1],t0:rs,t1:Infinity});return{moves,rests,total:u.sim?u.sim.t:0};}
 function posAt(u,t){const T=u.timeline;for(const m of T.moves)if(t>=m.t0&&t<m.t1){const f=(t-m.t0)/(m.t1-m.t0);return[m.from[0]+(m.to[0]-m.from[0])*f,m.from[1]+(m.to[1]-m.from[1])*f];}for(const r of T.rests)if(t>=r.t0&&t<r.t1)return r.cell;return T.rests[T.rests.length-1].cell;}
-function recomputeAll(){reindex();for(const u of units)computeUser(u);
+function recomputeAll(changed){reindex();for(const u of (changed===undefined?units:changed))computeUser(u);
   maxT=0;for(const u of units)if(isFinite(u.timeline.total))maxT=Math.max(maxT,u.timeline.total);$('slider').max=Math.max(0.1,maxT).toFixed(1);
   const cm=new Map();for(const u of units)for(const r of u.timeline.rests){const k=key(r.cell[0],r.cell[1]);if(!cm.has(k))cm.set(k,[]);cm.get(k).push({u,t0:r.t0,t1:r.t1});}
   conflicts=[];conflictCells=new Set();
@@ -282,10 +282,10 @@ function render(){
     const wl=$('wplist');wl.innerHTML='';
     u.wps.forEach((wp,i)=>{const d=document.createElement('div');d.className='wpitem'+(replaceIdx===i?' repl':'');d.innerHTML=`<span class="lab">経由地${i+1}：(${wp[0]}, ${wp[1]})</span>`;
       const mk=(t,fn)=>{const b=document.createElement('button');b.className='btn sm';b.textContent=t;b.onclick=fn;return b;};
-      d.appendChild(mk('↑',()=>{if(i>0){[u.wps[i-1],u.wps[i]]=[u.wps[i],u.wps[i-1]];recomputeAll();render();draw();}}));
-      d.appendChild(mk('↓',()=>{if(i<u.wps.length-1){[u.wps[i+1],u.wps[i]]=[u.wps[i],u.wps[i+1]];recomputeAll();render();draw();}}));
+      d.appendChild(mk('↑',()=>{if(i>0){[u.wps[i-1],u.wps[i]]=[u.wps[i],u.wps[i-1]];recomputeAll([u]);render();draw();}}));
+      d.appendChild(mk('↓',()=>{if(i<u.wps.length-1){[u.wps[i+1],u.wps[i]]=[u.wps[i],u.wps[i+1]];recomputeAll([u]);render();draw();}}));
       d.appendChild(mk('置換',()=>{replaceIdx=replaceIdx===i?-1:i;wpMode=false;render();}));
-      d.appendChild(mk('削除',()=>{u.wps.splice(i,1);replaceIdx=-1;recomputeAll();render();draw();}));
+      d.appendChild(mk('削除',()=>{u.wps.splice(i,1);replaceIdx=-1;recomputeAll([u]);render();draw();}));
       wl.appendChild(d);});
   }
   const cb=$('confbox');
@@ -299,27 +299,27 @@ function centerOn(x,y){if(scale<9)scale=9;offX=cv.clientWidth/2-(x+y)*scale;offY
 
 document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{placeRole=placeRole===c.dataset.role?null:c.dataset.role;selId=null;wpMode=false;replaceIdx=-1;render();draw();});
 $('uname').oninput=function(){const u=sel();if(u){u.name=this.value.trim();draw();}};
-$('del').onclick=()=>{units=units.filter(z=>z.id!==selId);selId=null;recomputeAll();render();draw();};
+$('del').onclick=()=>{units=units.filter(z=>z.id!==selId);selId=null;recomputeAll([]);render();draw();};
 $('clear').onclick=()=>{if(units.length&&confirm('すべてのユーザーを消去しますか？')){units=[];selId=null;counts={'先陣':0,'芝見':0,'補給':0};Tt=0;$('slider').value=0;updTime();recomputeAll();render();draw();}};
 $('wp').onclick=()=>{wpMode=!wpMode;replaceIdx=-1;render();};
-$('mode').onclick=()=>{const u=sel();if(!u)return;if(!u.manual){u.manual=true;u.path=(u.stops&&u.stops.length>1)?u.stops.slice(1).map(c=>[c[0],c[1]]):[];u.dest=null;u.wps=[];u.snapped=false;}else{u.manual=false;u.dest=(u.path&&u.path.length)?u.path[u.path.length-1].slice():null;u.path=[];u.wps=[];}wpMode=false;replaceIdx=-1;resetT();recomputeAll();render();draw();};
-$('undo').onclick=()=>{const u=sel();if(u&&u.manual&&u.path&&u.path.length){u.path.pop();resetT();recomputeAll();render();draw();}};
-$('atk').onclick=()=>{const u=sel();if(u){u.attackEnd=!u.attackEnd;recomputeAll();render();draw();}};
-$('rclear').onclick=()=>{const u=sel();if(u){u.dest=null;u.wps=[];u.attackEnd=false;u.snapped=false;wpMode=false;replaceIdx=-1;recomputeAll();render();draw();}};
+$('mode').onclick=()=>{const u=sel();if(!u)return;if(!u.manual){u.manual=true;u.path=(u.stops&&u.stops.length>1)?u.stops.slice(1).map(c=>[c[0],c[1]]):[];u.dest=null;u.wps=[];u.snapped=false;}else{u.manual=false;u.dest=(u.path&&u.path.length)?u.path[u.path.length-1].slice():null;u.path=[];u.wps=[];}wpMode=false;replaceIdx=-1;resetT();recomputeAll([u]);render();draw();};
+$('undo').onclick=()=>{const u=sel();if(u&&u.manual&&u.path&&u.path.length){u.path.pop();resetT();recomputeAll([u]);render();draw();}};
+$('atk').onclick=()=>{const u=sel();if(u){u.attackEnd=!u.attackEnd;recomputeAll([u]);render();draw();}};
+$('rclear').onclick=()=>{const u=sel();if(u){u.dest=null;u.wps=[];u.attackEnd=false;u.snapped=false;wpMode=false;replaceIdx=-1;recomputeAll([u]);render();draw();}};
 
 
 function resetT(){Tt=0;$('slider').value=0;updTime();}
 function tapCell(x,y){
-  if(placeRole){if(!landableSel(x,y)){flash('ここには配置できません（着地不可）');return;}counts[placeRole]++;units.push({id:++uidc,x,y,role:placeRole,name:'',auto:placeRole+counts[placeRole],wps:[],dest:null,attackEnd:false,snapped:false,manual:false,path:[]});recomputeAll();render();draw();return;}
+  if(placeRole){if(!landableSel(x,y)){flash('ここには配置できません（着地不可）');return;}counts[placeRole]++;const nu={id:++uidc,x,y,role:placeRole,name:'',auto:placeRole+counts[placeRole],wps:[],dest:null,attackEnd:false,snapped:false,manual:false,path:[]};units.push(nu);recomputeAll([nu]);render();draw();return;}
   const hit=unitAt.get(key(x,y));if(hit&&hit.id!==selId){selId=hit.id;wpMode=false;replaceIdx=-1;render();draw();return;}
   const u=sel();if(!u)return;
-  if(u.manual){const R=ROLE[u.role].range,last=u.stops[u.stops.length-1],c=manualNext(last,[x,y],R);if(!c){flash('近くに着地できるマスがありません');return;}u.path.push(c);resetT();recomputeAll();render();draw();return;}
+  if(u.manual){const R=ROLE[u.role].range,last=u.stops[u.stops.length-1],c=manualNext(last,[x,y],R);if(!c){flash('近くに着地できるマスがありません');return;}u.path.push(c);resetT();recomputeAll([u]);render();draw();return;}
   const sn=snap(x,y);if(!sn){flash('近くに着地できるマスがありません');return;}
   if(replaceIdx>=0){u.wps[replaceIdx]=sn.cell;replaceIdx=-1;}
   else if(wpMode){u.wps.push(sn.cell);}
   else if(!u.dest){u.dest=sn.cell;u.snapped=sn.snapped;} // 初回のみタップで設定
   else return; // 目的地あり＋空マスタップ → 無視（移動はドラッグで）
-  resetT();recomputeAll();render();draw();
+  resetT();recomputeAll([u]);render();draw();
 }
 
 // pointer
@@ -355,7 +355,7 @@ cv.addEventListener('pointerup',endPtr);cv.addEventListener('pointercancel',endP
 function applyGrab(g,cell){const u=g.u;const sn=snap(cell[0],cell[1]);if(!sn){render();draw();return;}const C=sn.cell;
   if(g.kind==='user'){const dx=C[0]-u.x,dy=C[1]-u.y;u.x=C[0];u.y=C[1];u.wps=u.wps.map(w=>{const s2=snap(w[0]+dx,w[1]+dy);return s2?s2.cell:w;});u.path=(u.path||[]).map(w=>{const s2=snap(w[0]+dx,w[1]+dy);return s2?s2.cell:w;});if(u.dest){const s2=snap(u.dest[0]+dx,u.dest[1]+dy);if(s2){u.dest=s2.cell;u.snapped=s2.snapped;}}}
   else if(g.kind==='stop'){const m=u.meta[g.j];if(!m){return;}if(m.kind==='dest'){u.dest=C;u.snapped=sn.snapped;}else if(m.kind==='wp'){u.wps[m.wpIndex]=C;}else if(m.kind==='auto'){u.wps.splice(m.seg,0,C);}else if(m.kind==='mmove'){u.path[m.idx]=C;}}
-  resetT();recomputeAll();render();draw();}
+  resetT();recomputeAll([u]);render();draw();}
 cv.addEventListener('wheel',e=>{e.preventDefault();const r=cv.getBoundingClientRect();zoomAt(e.clientX-r.left,e.clientY-r.top,e.deltaY<0?1.12:1/1.12);},{passive:false});
 function zoomAt(mx,my,f){const ns=Math.max(1.2,Math.min(scale*f,48));offX=mx-(mx-offX)*(ns/scale);offY=my-(my-offY)*(ns/scale);scale=ns;draw();}
 
